@@ -1,0 +1,17 @@
+{
+    "name": "model/assets",
+    "description": "Assets management",
+    "type": "library",
+    "authors": [
+        {
+            "name": "Domenico Giambra",
+            "email": "zorinik@gmail.com"
+        }
+    ],
+    "autoload": {
+        "psr-4": {"Model\\Assets\\": "src/"}
+    },
+    "require": {
+        "model/config": "^0.5.13"
+    }
+}
