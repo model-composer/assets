@@ -22,10 +22,12 @@ class Assets
 
 		$displayPath = $parsed['path'];
 		if ($parsed['is_remote'] and $config['force_local']) {
-			if ($parsed['local'])
+			if ($parsed['local']) {
+				$parsed['is_remote'] = false;
 				$displayPath = $parsed['local'];
-			else
+			} else {
 				throw new \Exception('Cannot render js script "' . $path . '"; remote disabled, local file not found');
+			}
 		}
 		?>
 		<script type="text/javascript" src="<?= $displayPath ?>"<?= $options['defer'] ? ' defer' : '' ?><?= $options['async'] ? ' async' : '' ?>></script>
@@ -49,10 +51,12 @@ class Assets
 
 		$displayPath = $parsed['path'];
 		if ($parsed['is_remote'] and $config['force_local']) {
-			if ($parsed['local'])
+			if ($parsed['local']) {
+				$parsed['is_remote'] = false;
 				$displayPath = $parsed['local'];
-			else
+			} else {
 				throw new \Exception('Cannot render css file "' . $path . '"; remote disabled, local file not found');
+			}
 		}
 
 		$failover = ($parsed['is_remote'] and $parsed['local']) ? ' onerror="this.onerror=null;this.href=\'' . $parsed['local'] . '\';"' : '';
@@ -96,13 +100,13 @@ class Assets
 				return [
 					'path' => $path,
 					'is_remote' => true,
-					'fallback' => $localFile,
+					'local' => defined('PATH') ? PATH . $localFile : $localFile,
 				];
 			} else {
 				return [
 					'path' => $path,
 					'is_remote' => true,
-					'fallback' => null,
+					'local' => null,
 				];
 			}
 		} else {
@@ -112,7 +116,7 @@ class Assets
 			return [
 				'path' => $path,
 				'is_remote' => false,
-				'fallback' => null,
+				'local' => null,
 			];
 		}
 	}
@@ -141,7 +145,7 @@ class Assets
 						return $config;
 
 					return [
-						'force_local' => true,
+						'force_local' => false,
 						'cache_dir' => 'app/assets/cache',
 					];
 				},
