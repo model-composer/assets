@@ -5,6 +5,58 @@ use Model\Config\Config;
 class Assets
 {
 	private static array $files = [];
+	private static array $enabled = [];
+
+	/**
+	 * @param string $what
+	 * @param int|null $version
+	 * @return void
+	 */
+	public static function enable(string $what, ?int $version = null): void
+	{
+		if (array_key_exists($what, self::$enabled))
+			return;
+
+		switch ($what) {
+			case 'bootstrap':
+				$version ??= 5;
+
+				switch ($version) {
+					case 4:
+						self::enable('jquery', 3);
+						self::add('https://cdn.jsdelivr.net/npm/bootstrap@4.6.2/dist/css/bootstrap.min.css');
+						self::add('https://cdn.jsdelivr.net/npm/bootstrap@4.6.2/dist/js/bootstrap.bundle.min.js');
+						break;
+
+					case 5:
+						self::add('https://cdn.jsdelivr.net/npm/bootstrap@5.2.1/dist/css/bootstrap.min.css');
+						self::add('https://cdn.jsdelivr.net/npm/bootstrap@5.2.1/dist/js/bootstrap.bundle.min.js');
+						break;
+
+					default:
+						throw new \Exception('Unknown Bootstrap version');
+				}
+				break;
+
+			case 'jquery':
+				$version ??= 3;
+
+				switch ($version) {
+					case 3:
+						self::add('https://code.jquery.com/jquery-3.6.1.min.js');
+						break;
+
+					default:
+						throw new \Exception('Unknown JQuery version');
+				}
+				break;
+
+			default:
+				throw new \Exception('Unsupported assets library');
+		}
+
+		self::$enabled[$what] = $version;
+	}
 
 	/**
 	 * Add a file to the render list
