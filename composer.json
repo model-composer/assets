@@ -13,5 +13,8 @@
     },
     "require": {
         "model/config": "^0.5.13"
+    },
+    "suggest": {
+        "matthiasmullie/minify": "If you want to enable minify, this library is required"
     }
 }

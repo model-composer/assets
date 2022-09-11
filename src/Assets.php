@@ -4,103 +4,260 @@ use Model\Config\Config;
 
 class Assets
 {
+	private static array $files = [];
+
 	/**
-	 * @param string $path
+	 * Add a file to the render list
+	 *
+	 * @param string $file
+	 * @param array $options
+	 */
+	public static function add(string $file, array $options = []): void
+	{
+		$options = array_merge([
+			'type' => null,
+			'withTags' => [],
+			'exceptTags' => [],
+			'custom' => true,
+			'cacheable' => true,
+			'defer' => false,
+			'async' => false,
+		], $options);
+
+		$ext = strtolower(pathinfo(parse_url($file)['path'], PATHINFO_EXTENSION));
+		if (!in_array($ext, ['js', 'css']))
+			$options['cacheable'] = false;
+
+		if ($options['type'] === null)
+			$options['type'] = $ext;
+
+		if (!in_array($options['type'], ['css', 'js']))
+			throw new \Exception('Invalid asset type');
+
+		if (!is_array($options['withTags']))
+			$options['withTags'] = [$options['withTags']];
+		if (!is_array($options['exceptTags']))
+			$options['exceptTags'] = [$options['exceptTags']];
+
+		if (!isset(self::$files[$file]))
+			self::$files[$file] = $options;
+	}
+
+	/**
+	 * Remove file from the render list
+	 *
+	 * @param string $file
+	 */
+	public static function remove(string $file): void
+	{
+		if (!isset(self::$files[$file]))
+			unset(self::$files[$file]);
+	}
+
+	/**
+	 * Removes all files set by the user
+	 */
+	public static function wipe(): void
+	{
+		foreach (self::$files as $file => $options) {
+			if ($options['custom'])
+				self::remove($file);
+		}
+	}
+
+	/**
+	 * @param array $tags
+	 * @param bool $forCache
+	 * @return array
+	 */
+	public static function getList(array $tags = [], bool $forCache = false): array
+	{
+		$list = [];
+		foreach (self::$files as $file => $options) {
+			if ($forCache) {
+				if ($options['cacheable'])
+					$list[$file] = $options;
+			} else {
+				if (!empty($options['withTags'])) {
+					$allowed = false;
+					foreach ($options['withTags'] as $tag) {
+						if (in_array($tag, $tags)) {
+							$allowed = true;
+							break;
+						}
+					}
+
+					if (!$allowed)
+						continue;
+				}
+
+				if (!empty($options['exceptTags'])) {
+					$allowed = true;
+					foreach ($options['exceptTags'] as $tag) {
+						if (in_array($tag, $tags)) {
+							$allowed = false;
+							break;
+						}
+					}
+
+					if (!$allowed)
+						continue;
+				}
+
+				$list[$file] = $options;
+			}
+		}
+
+		return $list;
+	}
+
+	/**
+	 * Render all added files given the tags
+	 *
+	 * @param array $tags
+	 * @return void
+	 */
+	public static function render(array $tags = []): void
+	{
+		$config = self::getConfig();
+		$list = self::getList($tags);
+
+		$toMinify = [
+			'css' => [],
+			'js' => [],
+		];
+
+		foreach ($list as $file => $options) {
+			$parsedFile = self::parse($file, $options['cacheable']);
+			if (!$config['minify_' . $options['type']] or ($parsedFile['is_remote'] and !$parsedFile['local']) or !$options['cacheable'] or (defined('DEBUG_MODE') and DEBUG_MODE)) {
+				self::renderFile($config, $parsedFile, $options);
+			} else {
+				$group = (int)$options['async'] . '-' . (int)$options['defer'];
+				if (!isset($toMinify[$options['type']][$group])) {
+					$toMinify[$options['type']][$group] = [
+						'async' => $options['async'],
+						'defer' => $options['defer'],
+						'files' => [],
+					];
+				}
+				$toMinify[$options['type']][$group]['files'][] = $parsedFile['local'] ?? $file;
+			}
+		}
+
+		if (!empty($toMinify['css']) or !empty($toMinify['js'])) {
+			$directories = self::getDirectories();
+			$minifyDir = $directories['cache_dir'] . 'minify';
+			$minifyDirFull = $directories['cache_full'] . 'minify';
+			if (!is_dir($minifyDirFull))
+				mkdir($minifyDirFull, 0777, true);
+
+			foreach ($toMinify as $type => $groups) {
+				foreach ($groups as $group) {
+					$minifiedFile = sha1(implode('', $group['files']) . $config['version']) . '.' . $type;
+
+					if (!file_exists($minifyDirFull . DIRECTORY_SEPARATOR . $minifiedFile)) {
+						$minifier = match ($type) {
+							'css' => new \MatthiasMullie\Minify\CSS(),
+							'js' => new \MatthiasMullie\Minify\JS(),
+							default => throw new \Exception('Unknown minified file type'),
+						};
+						foreach ($group['files'] as $file)
+							$minifier->add(parse_url($directories['project_root'] . $file)['path']);
+						$minifier->minify($minifyDirFull . DIRECTORY_SEPARATOR . $minifiedFile);
+					}
+
+					self::renderFile($config, self::parse($minifyDir . DIRECTORY_SEPARATOR . $minifiedFile), [
+						'async' => $group['async'],
+						'defer' => $group['defer'],
+					]);
+				}
+			}
+		}
+	}
+
+	/**
+	 * @param array $config
+	 * @param array $parsedFile
 	 * @param array $options
 	 * @return void
 	 */
-	public static function renderJs(string $path, array $options = []): void
+	private static function renderFile(array $config, array $parsedFile, array $options = []): void
 	{
 		$options = array_merge([
+			'type' => null,
 			'async' => false,
 			'defer' => false,
 		], $options);
 
-		$config = self::getConfig();
+		if (!in_array($options['type'], ['css', 'js']))
+			throw new \Exception('Invalid asset type');
 
-		$parsed = self::get($path);
-
-		$displayPath = $parsed['path'];
-		if ($parsed['is_remote'] and $config['force_local']) {
-			if ($parsed['local']) {
-				$parsed['is_remote'] = false;
-				$displayPath = $parsed['local'];
+		$displayPath = $parsedFile['path'];
+		if ($parsedFile['is_remote'] and $config['force_local']) {
+			if ($parsedFile['local']) {
+				$parsedFile['is_remote'] = false;
+				$displayPath = $parsedFile['local'];
 			} else {
-				throw new \Exception('Cannot render js script "' . $path . '"; remote disabled, local file not found');
-			}
-		}
-		?>
-		<script type="text/javascript" src="<?= $displayPath ?>"<?= $options['defer'] ? ' defer' : '' ?><?= $options['async'] ? ' async' : '' ?>></script>
-		<?php
-	}
-
-	/**
-	 * @param string $path
-	 * @param array $options
-	 * @return void
-	 */
-	public static function renderCss(string $path, array $options = []): void
-	{
-		$options = array_merge([
-			'defer' => false,
-		], $options);
-
-		$config = self::getConfig();
-
-		$parsed = self::get($path);
-
-		$displayPath = $parsed['path'];
-		if ($parsed['is_remote'] and $config['force_local']) {
-			if ($parsed['local']) {
-				$parsed['is_remote'] = false;
-				$displayPath = $parsed['local'];
-			} else {
-				throw new \Exception('Cannot render css file "' . $path . '"; remote disabled, local file not found');
+				throw new \Exception('Cannot render file "' . $parsedFile['path'] . '"; remote disabled, local file not found');
 			}
 		}
 
-		$failover = ($parsed['is_remote'] and $parsed['local']) ? ' onerror="this.onerror=null;this.href=\'' . $parsed['local'] . '\';"' : '';
+		if ($config['version'])
+			$displayPath .= '?v=' . $config['version'];
 
-		if ($options['defer']) {
-			?>
-			<link rel="preload" href="<?= $displayPath ?>" as="style" onload="this.onload=null;this.rel='stylesheet'"<?= $failover ?>/>
-			<noscript>
-				<link rel="stylesheet" type="text/css" href="<?= $displayPath ?>"<?= $failover ?>/>
-			</noscript>
-			<?php
-		} else {
-			?>
-			<link rel="stylesheet" type="text/css" href="<?= $displayPath ?>"<?= $failover ?>/>
-			<?php
+		switch ($options['type']) {
+			case 'css':
+				$failover = ($parsedFile['is_remote'] and $parsedFile['local']) ? ' onerror="this.onerror=null;this.href=\'' . $parsedFile['local'] . '\';"' : '';
+
+				if ($options['defer']) {
+					?>
+					<link rel="preload" href="<?= $displayPath ?>" as="style" onload="this.onload=null;this.rel='stylesheet'"<?= $failover ?>/>
+					<noscript>
+						<link rel="stylesheet" type="text/css" href="<?= $displayPath ?>"<?= $failover ?>/>
+					</noscript>
+					<?php
+				} else {
+					?>
+					<link rel="stylesheet" type="text/css" href="<?= $displayPath ?>"<?= $failover ?>/>
+					<?php
+				}
+				break;
+
+			case 'js':
+				?>
+				<script type="text/javascript" src="<?= $displayPath ?>"<?= $options['defer'] ? ' defer' : '' ?><?= $options['async'] ? ' async' : '' ?>></script>
+				<?php
+				break;
 		}
 	}
 
 	/**
 	 * @param string $path
+	 * @param bool $cacheable
 	 * @return array
 	 */
-	public static function get(string $path): array
+	private static function parse(string $path, bool $cacheable = true): array
 	{
+		$directories = self::getDirectories();
+
 		if (str_starts_with(strtolower($path), 'http://') or str_starts_with(strtolower($path), 'https://') or str_starts_with($path, '//')) {
 			$parsed_url = parse_url($path);
 
-			if (in_array(strtolower(pathinfo($parsed_url['path'], PATHINFO_EXTENSION)), ['js', 'css'])) {
+			if ($cacheable and in_array(strtolower(pathinfo($parsed_url['path'], PATHINFO_EXTENSION)), ['js', 'css'])) {
 				// Only js and css can be cached locally
-				$config = self::getConfig();
-
-				$localFile = $config['cache_dir'] . DIRECTORY_SEPARATOR . $parsed_url['host'] . DIRECTORY_SEPARATOR . $parsed_url['path'];
-				if (!file_exists(self::getProjectRoot() . $localFile)) {
-					$cacheDir = pathinfo(self::getProjectRoot() . $localFile, PATHINFO_DIRNAME);
+				$localFile = $parsed_url['host'] . DIRECTORY_SEPARATOR . $parsed_url['path'];
+				if (!file_exists($directories['cache_full'] . $localFile)) {
+					$cacheDir = pathinfo($directories['cache_full'] . $localFile, PATHINFO_DIRNAME);
 					if (!is_dir($cacheDir))
 						mkdir($cacheDir, 0777, true);
 
-					file_put_contents(self::getProjectRoot() . $localFile, file_get_contents($path));
+					file_put_contents($directories['cache_full'] . $localFile, file_get_contents($path));
 				}
 
 				return [
 					'path' => $path,
 					'is_remote' => true,
-					'local' => defined('PATH') ? PATH . $localFile : $localFile,
+					'local' => (defined('PATH') ? PATH : '') . $directories['cache_dir'] . $localFile,
 				];
 			} else {
 				return [
@@ -122,13 +279,24 @@ class Assets
 	}
 
 	/**
-	 * Retrieves project root
+	 * Retrieves cache directory path
 	 *
-	 * @return string
+	 * @return array
 	 */
-	private static function getProjectRoot(): string
+	private static function getDirectories(): array
 	{
-		return realpath(__DIR__ . DIRECTORY_SEPARATOR . '..' . DIRECTORY_SEPARATOR . '..' . DIRECTORY_SEPARATOR . '..' . DIRECTORY_SEPARATOR . '..') . DIRECTORY_SEPARATOR;
+		$config = self::getConfig();
+
+		$projectRoot = realpath(__DIR__ . DIRECTORY_SEPARATOR . '..' . DIRECTORY_SEPARATOR . '..' . DIRECTORY_SEPARATOR . '..' . DIRECTORY_SEPARATOR . '..') . DIRECTORY_SEPARATOR;
+
+		if (!is_dir($projectRoot . $config['cache_dir']))
+			mkdir($projectRoot . $config['cache_dir'], 0777, true);
+
+		return [
+			'project_root' => $projectRoot,
+			'cache_dir' => $config['cache_dir'] . DIRECTORY_SEPARATOR,
+			'cache_full' => $projectRoot . $config['cache_dir'] . DIRECTORY_SEPARATOR,
+		];
 	}
 
 	/**
@@ -148,6 +316,15 @@ class Assets
 						'force_local' => false,
 						'cache_dir' => 'app/assets/cache',
 					];
+				},
+			],
+			[
+				'version' => '0.2.0',
+				'migration' => function (array $config, string $env) {
+					$config['minify_css'] = false;
+					$config['minify_js'] = false;
+					$config['version'] = null;
+					return $config;
 				},
 			],
 		]);
