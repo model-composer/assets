@@ -22,6 +22,7 @@ class Assets
 			'cacheable' => true,
 			'defer' => false,
 			'async' => false,
+			'version' => null,
 		], $options);
 
 		$ext = strtolower(pathinfo(parse_url($file)['path'], PATHINFO_EXTENSION));
@@ -38,6 +39,9 @@ class Assets
 			$options['withTags'] = [$options['withTags']];
 		if (!is_array($options['exceptTags']))
 			$options['exceptTags'] = [$options['exceptTags']];
+
+		if (!in_array('position-head', $options['withTags']) and !in_array('position-foot', $options['withTags']))
+			$options['withTags'][] = 'position-head';
 
 		if (!isset(self::$files[$file]))
 			self::$files[$file] = $options;
@@ -187,6 +191,7 @@ class Assets
 			'type' => null,
 			'async' => false,
 			'defer' => false,
+			'version' => null,
 		], $options);
 
 		if (!in_array($options['type'], ['css', 'js']))
@@ -202,8 +207,8 @@ class Assets
 			}
 		}
 
-		if ($config['version'])
-			$displayPath .= '?v=' . $config['version'];
+		if ($options['version'] ?? $config['version'])
+			$displayPath .= '?v=' . ($options['version'] ?? $config['version']);
 
 		switch ($options['type']) {
 			case 'css':
@@ -314,7 +319,7 @@ class Assets
 
 					return [
 						'force_local' => false,
-						'cache_dir' => 'app/assets/cache',
+						'cache_dir' => 'app-data/assets',
 					];
 				},
 			],
