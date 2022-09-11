@@ -299,10 +299,12 @@ class Assets
 
 		if (str_starts_with(strtolower($path), 'http://') or str_starts_with(strtolower($path), 'https://') or str_starts_with($path, '//')) {
 			$parsed_url = parse_url($path);
+			if (!str_starts_with($parsed_url['path'], '/'))
+				$parsed_url['path'] = '/' . $parsed_url['path'];
 
 			if ($cacheable and in_array(strtolower(pathinfo($parsed_url['path'], PATHINFO_EXTENSION)), ['js', 'css'])) {
 				// Only js and css can be cached locally
-				$localFile = $parsed_url['host'] . DIRECTORY_SEPARATOR . $parsed_url['path'];
+				$localFile = str_replace('/', DIRECTORY_SEPARATOR, $parsed_url['host'] . $parsed_url['path']);
 				if (!file_exists($directories['cache_full'] . $localFile)) {
 					$cacheDir = pathinfo($directories['cache_full'] . $localFile, PATHINFO_DIRNAME);
 					if (!is_dir($cacheDir))
