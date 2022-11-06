@@ -175,7 +175,7 @@ class Assets
 	 */
 	public static function render(array $tags = []): void
 	{
-		$config = self::getConfig();
+		$config = Config::get('assets');
 		$list = self::getList($tags);
 
 		$toMinify = [
@@ -344,7 +344,7 @@ class Assets
 	 */
 	private static function getDirectories(): array
 	{
-		$config = self::getConfig();
+		$config = Config::get('assets');
 
 		$projectRoot = realpath(__DIR__ . DIRECTORY_SEPARATOR . '..' . DIRECTORY_SEPARATOR . '..' . DIRECTORY_SEPARATOR . '..' . DIRECTORY_SEPARATOR . '..') . DIRECTORY_SEPARATOR;
 
@@ -356,36 +356,5 @@ class Assets
 			'cache_dir' => $config['cache_dir'] . DIRECTORY_SEPARATOR,
 			'cache_full' => $projectRoot . $config['cache_dir'] . DIRECTORY_SEPARATOR,
 		];
-	}
-
-	/**
-	 * @return array
-	 * @throws \Exception
-	 */
-	public static function getConfig(): array
-	{
-		return Config::get('assets', [
-			[
-				'version' => '0.1.0',
-				'migration' => function (array $config, string $env) {
-					if ($config) // Already existing
-						return $config;
-
-					return [
-						'force_local' => false,
-						'cache_dir' => 'app-data/assets',
-					];
-				},
-			],
-			[
-				'version' => '0.2.0',
-				'migration' => function (array $config, string $env) {
-					$config['minify_css'] = false;
-					$config['minify_js'] = false;
-					$config['version'] = null;
-					return $config;
-				},
-			],
-		]);
 	}
 }
