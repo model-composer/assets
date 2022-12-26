@@ -1,4 +1,4 @@
-<?php namespace Model\Assets;
+<?php namespace Model\Assets\Providers;
 
 use Model\Config\AbstractConfigProvider;
 
