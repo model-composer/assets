@@ -282,7 +282,7 @@ class Assets
 
 			case 'js':
 				?>
-				<script type="text/javascript" src="<?= $displayPath ?>"<?= $options['defer'] ? ' defer' : '' ?><?= $options['async'] ? ' async' : '' ?>></script>
+				<script src="<?= $displayPath ?>"<?= $options['defer'] ? ' defer' : '' ?><?= $options['async'] ? ' async' : '' ?>></script>
 				<?php
 				break;
 		}
