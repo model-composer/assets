@@ -59,6 +59,17 @@ class Assets
 	}
 
 	/**
+	 * Check if an asset is enabled and returns its version
+	 *
+	 * @param string $what
+	 * @return int|null
+	 */
+	public static function isEnabled(string $what): ?int
+	{
+		return self::$enabled[$what] ?? null;
+	}
+
+	/**
 	 * Add a file to the render list
 	 *
 	 * @param string $file
