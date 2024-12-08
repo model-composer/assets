@@ -146,10 +146,10 @@ class Assets
 					$list[$file] = $options;
 			} else {
 				if (!empty($options['withTags'])) {
-					$allowed = false;
+					$allowed = true;
 					foreach ($options['withTags'] as $tag) {
-						if (in_array($tag, $tags)) {
-							$allowed = true;
+						if (!in_array($tag, $tags)) {
+							$allowed = false;
 							break;
 						}
 					}
