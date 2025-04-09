@@ -28,6 +28,17 @@ class ConfigProvider extends AbstractConfigProvider
 					return $config;
 				},
 			],
+			[
+				'version' => '0.3.0',
+				'migration' => function (array $config, string $env) {
+					$config['scss'] = [
+						'compile' => false,
+						'input_dir' => 'app/assets/scss',
+						'output_dir' => 'app/assets/css',
+					];
+					return $config;
+				},
+			],
 		];
 	}
 }
