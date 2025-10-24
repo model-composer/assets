@@ -99,12 +99,17 @@ class Assets
 			throw new \Exception('Invalid asset type');
 
 		if (!is_array($options['withTags']))
-			$options['withTags'] = [$options['withTags']];
+			throw new \Exception('withTags option must be an array');
 		if (!is_array($options['exceptTags']))
-			$options['exceptTags'] = [$options['exceptTags']];
+			throw new \Exception('exceptTags option must be an array');
 
-		if (!in_array('position-head', $options['withTags']) and !in_array('position-foot', $options['withTags']))
-			$options['withTags'][] = 'position-head';
+		if (count($options['withTags']) and array_key_first($options['withTags']) === 0)
+			throw new \Exception('withTags option must be an associative array');
+		if (count($options['exceptTags']) and array_key_first($options['exceptTags']) === 0)
+			throw new \Exception('exceptTags option must be an associative array');
+
+		if (!isset($options['withTags']['position']))
+			$options['withTags']['position'] = 'head';
 
 		if (!isset(self::$files[$file]))
 			self::$files[$file] = $options;
@@ -147,8 +152,8 @@ class Assets
 			} else {
 				if (!empty($options['withTags'])) {
 					$allowed = true;
-					foreach ($options['withTags'] as $tag) {
-						if (!in_array($tag, $tags)) {
+					foreach ($options['withTags'] as $tagKey => $tagValue) {
+						if (($tags[$tagKey] ?? null) !== $tagValue) {
 							$allowed = false;
 							break;
 						}
@@ -160,8 +165,8 @@ class Assets
 
 				if (!empty($options['exceptTags'])) {
 					$allowed = true;
-					foreach ($options['exceptTags'] as $tag) {
-						if (in_array($tag, $tags)) {
+					foreach ($options['exceptTags'] as $tagKey => $tagValue) {
+						if (($tags[$tagKey] ?? null) === $tagValue) {
 							$allowed = false;
 							break;
 						}
