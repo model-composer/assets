@@ -122,7 +122,7 @@ class Assets
 	 */
 	public static function remove(string $file): void
 	{
-		if (!isset(self::$files[$file]))
+		if (isset(self::$files[$file]))
 			unset(self::$files[$file]);
 	}
 
