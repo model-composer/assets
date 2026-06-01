@@ -89,11 +89,11 @@ class Assets
 		], $options);
 
 		$ext = strtolower(pathinfo(parse_url($file)['path'], PATHINFO_EXTENSION));
-		if (!in_array($ext, ['js', 'css']))
-			$options['cacheable'] = false;
-
-		if ($options['type'] === null)
+		if ($options['type'] === null and $ext)
 			$options['type'] = $ext;
+
+		if (!in_array($options['type'], ['js', 'css']))
+			$options['cacheable'] = false;
 
 		if (!in_array($options['type'], ['css', 'js']))
 			throw new \Exception('Invalid asset type');
@@ -318,7 +318,7 @@ class Assets
 			if (!str_starts_with($parsed_url['path'], '/'))
 				$parsed_url['path'] = '/' . $parsed_url['path'];
 
-			if ($cacheable and in_array(strtolower(pathinfo($parsed_url['path'], PATHINFO_EXTENSION)), ['js', 'css'])) {
+			if ($cacheable) {
 				// Only js and css can be cached locally
 				$localFile = str_replace('/', DIRECTORY_SEPARATOR, $parsed_url['host'] . $parsed_url['path']);
 				if (!file_exists($directories['cache_full'] . $localFile)) {
