@@ -1,11 +1,13 @@
 <?php namespace Model\Assets;
 
 use Model\Config\Config;
+use Model\ProvidersFinder\Providers;
 
 class Assets
 {
 	private static array $files = [];
 	private static array $enabled = [];
+	private static ?array $providersAssets = null;
 
 	/**
 	 * @param string $what
@@ -14,6 +16,8 @@ class Assets
 	 */
 	public static function enable(string $what, ?int $version = null): void
 	{
+		self::loadFromProviders();
+
 		if (array_key_exists($what, self::$enabled))
 			return;
 
@@ -52,10 +56,57 @@ class Assets
 				break;
 
 			default:
-				throw new \Exception('Unsupported assets library');
+				if (!isset(self::$providersAssets[$what]))
+					throw new \Exception('Unsupported assets library');
+
+				foreach (self::$providersAssets[$what]['files'] as $file) {
+					if (is_string($file)) {
+						self::add($file);
+					} else {
+						if (!isset($file['path']))
+							throw new \Exception('Each library file must have a path');
+
+						$options = $file;
+						unset($options['path']);
+						self::add($file['path'], $options);
+					}
+				}
+				break;
 		}
 
 		self::$enabled[$what] = $version;
+	}
+
+	/**
+	 * Lazily collects the libraries declared by every AssetsProvider and
+	 * auto-enables the ones flagged with 'auto_enable'.
+	 *
+	 * @return void
+	 */
+	private static function loadFromProviders(): void
+	{
+		if (self::$providersAssets !== null)
+			return;
+
+		self::$providersAssets = [];
+
+		$providers = Providers::find('AssetsProvider');
+		foreach ($providers as $provider) {
+			foreach ($provider['provider']::assets() as $library) {
+				if (!isset($library['name']))
+					throw new \Exception('Each assets library must have a name');
+
+				self::$providersAssets[$library['name']] = array_merge([
+					'auto_enable' => false,
+					'files' => [],
+				], $library);
+			}
+		}
+
+		foreach (self::$providersAssets as $library) {
+			if ($library['auto_enable'])
+				self::enable($library['name']);
+		}
 	}
 
 	/**
@@ -144,6 +195,8 @@ class Assets
 	 */
 	public static function getList(array $tags = [], bool $forCache = false): array
 	{
+		self::loadFromProviders();
+
 		$list = [];
 		foreach (self::$files as $file => $options) {
 			if ($forCache) {

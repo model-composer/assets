@@ -13,6 +13,7 @@
     },
     "require": {
         "model/config": "^0.7.0",
+        "model/providers-finder": "^0.3.7",
         "scssphp/scssphp": "^2.0"
     },
     "suggest": {
